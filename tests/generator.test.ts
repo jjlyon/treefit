@@ -1,95 +1,58 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParams } from '../src/lib/defaultParams';
 import { generateTree } from '../src/lib/generator';
-import { CircleMask } from '../src/lib/masks';
+import { CircleMask, HeartMask, SilhouetteMask, StarMask, createMask } from '../src/lib/masks';
 import { modelToSvg } from '../src/lib/renderSvg';
 import { createSvgText } from '../src/lib/svgExport';
-import type { BranchSegment } from '../src/lib/types';
+import { taperSegment } from '../src/lib/taperOutline';
+import type { TreeNode } from '../src/lib/types';
 
-function comparableSegments(segments: BranchSegment[]) {
-  return segments.map(({ id, kind, start, c1, c2, end, startThickness, endThickness, depth, parentId, childrenIds }) => ({
-    id,
-    kind,
-    start,
-    c1,
-    c2,
-    end,
-    startThickness,
-    endThickness,
-    depth,
-    parentId,
-    childrenIds,
-  }));
+function comparableNodes(nodes: TreeNode[]) {
+  return nodes.map(({ id, kind, position, parentId, childIds, depth, thickness }) => ({ id, kind, position, parentId, childIds, depth, thickness }));
 }
 
-describe('TreeFit generator', () => {
-  it('same seed and params produce identical segment lists', () => {
-    const first = generateTree(defaultParams);
-    const second = generateTree(defaultParams);
-    expect(comparableSegments(first.segments)).toEqual(comparableSegments(second.segments));
+function allSegments(model = generateTree(defaultParams)) {
+  return model.chains.flatMap((chain) => chain.segments);
+}
+
+describe('TreeFit v2 generator', () => {
+  it('same seed and params produce identical nodes and thicknesses', () => {
+    expect(comparableNodes(generateTree(defaultParams).nodes)).toEqual(comparableNodes(generateTree(defaultParams).nodes));
   });
 
-  it('different seed changes segment list', () => {
-    const first = generateTree(defaultParams);
-    const second = generateTree({ ...defaultParams, seed: 'different-seed' });
-    expect(comparableSegments(first.segments)).not.toEqual(comparableSegments(second.segments));
+  it('different seed changes tree nodes', () => {
+    expect(comparableNodes(generateTree(defaultParams).nodes)).not.toEqual(comparableNodes(generateTree({ ...defaultParams, seed: 'different-seed' }).nodes));
   });
 
-  it('all generated endpoints are inside CircleMask', () => {
-    const params = { ...defaultParams, branchDensity: 0.9, rootDensity: 0.9 };
-    const model = generateTree(params);
-    const mask = new CircleMask(model.params.radius);
-    for (const segment of model.segments) {
-      expect(mask.contains(segment.start)).toBe(true);
-      expect(mask.contains(segment.end)).toBe(true);
-      expect(mask.contains(segment.c1)).toBe(true);
-      expect(mask.contains(segment.c2)).toBe(true);
+  it('all generated nodes are inside every mask shape', () => {
+    const variants = [
+      { ...defaultParams, maskShape: 'circle' as const },
+      { ...defaultParams, maskShape: 'star' as const },
+      { ...defaultParams, maskShape: 'heart' as const },
+      { ...defaultParams, maskShape: 'silhouette' as const },
+    ];
+    for (const params of variants) {
+      const model = generateTree({ ...params, attractorCount: 250 });
+      const mask = createMask(params);
+      for (const node of model.nodes) expect(mask.contains(node.position)).toBe(true);
     }
   });
 
-  it('density increase generally increases segment count', () => {
-    const low = generateTree({ ...defaultParams, branchDensity: 0.1, rootDensity: 0.1, seed: 'density-test' });
-    const high = generateTree({ ...defaultParams, branchDensity: 0.9, rootDensity: 0.9, seed: 'density-test' });
-    expect(high.stats.segmentCount).toBeGreaterThan(low.stats.segmentCount);
-  });
-
-
-  it('structured mode preserves readable tree anatomy', () => {
-    const model = generateTree(defaultParams);
-    const trunks = model.segments.filter((segment) => segment.kind === 'trunk');
-    const branches = model.segments.filter((segment) => segment.kind === 'branch');
-    const roots = model.segments.filter((segment) => segment.kind === 'root');
-    const primaryBranches = branches.filter((segment) => segment.depth === 1);
-    const primaryRoots = roots.filter((segment) => segment.depth === 1);
-    const minTrunkEndThickness = Math.min(...trunks.map((segment) => segment.endThickness));
-    const maxBranchThickness = Math.max(...branches.map((segment) => Math.max(segment.startThickness, segment.endThickness)));
-
-    expect(model.params.generationMode).toBe('structured');
-    expect(trunks.length).toBeGreaterThanOrEqual(1);
-    expect(trunks.length).toBeLessThanOrEqual(3);
-    expect(primaryBranches.length).toBeGreaterThanOrEqual(6);
-    expect(primaryBranches.length).toBeLessThanOrEqual(12);
-    expect(primaryRoots.length).toBeGreaterThanOrEqual(5);
-    expect(primaryRoots.length).toBeLessThanOrEqual(10);
-    expect(maxBranchThickness).toBeLessThan(minTrunkEndThickness);
-    expect(branches.filter((segment) => segment.end.y < segment.start.y).length / branches.length).toBeGreaterThan(0.9);
-    expect(roots.filter((segment) => segment.end.y > segment.start.y).length / roots.length).toBeGreaterThan(0.9);
-    expect(primaryBranches.every((segment) => segment.end.y < segment.start.y)).toBe(true);
-    expect(primaryRoots.every((segment) => segment.end.y > segment.start.y)).toBe(true);
-    expect(primaryBranches.every((segment) => segment.start.y < model.params.radius * 0.32)).toBe(true);
-    expect(primaryRoots.every((segment) => segment.start.y > model.params.radius * 0.34)).toBe(true);
+  it('attractor density increase generally increases node count', () => {
+    const low = generateTree({ ...defaultParams, attractorCount: 250, seed: 'density-test' });
+    const high = generateTree({ ...defaultParams, attractorCount: 1000, seed: 'density-test' });
+    expect(high.stats.nodeCount).toBeGreaterThan(low.stats.nodeCount);
   });
 
   it('generated SVG contains named groups', () => {
     const svg = modelToSvg(generateTree(defaultParams));
-    for (const group of ['mask', 'trunk', 'branches', 'roots', 'bark_detail', 'leaves']) {
-      expect(svg).toContain(`id="${group}"`);
-    }
+    for (const group of ['mask-outline', 'trunk', 'branches', 'roots', 'leaves']) expect(svg).toContain(`id="${group}"`);
   });
 
-  it('no generated segment has NaN coordinates', () => {
-    const model = generateTree({ ...defaultParams, branchDensity: 1, rootDensity: 1 });
-    for (const segment of model.segments) {
+  it('no output path contains NaN coordinates', () => {
+    const svg = modelToSvg(generateTree({ ...defaultParams, attractorCount: 1000, rootBalance: 0.5 }));
+    expect(svg).not.toMatch(/NaN|Infinity/);
+    for (const segment of allSegments(generateTree(defaultParams))) {
       for (const point of [segment.start, segment.c1, segment.c2, segment.end]) {
         expect(Number.isNaN(point.x)).toBe(false);
         expect(Number.isNaN(point.y)).toBe(false);
@@ -104,5 +67,27 @@ describe('TreeFit generator', () => {
     expect(svg).toContain('viewBox=');
     expect(svg).toContain('TreeFit parameters');
     expect(svg.trim().endsWith('</svg>')).toBe(true);
+  });
+
+  it('tapered paths are closed with M and Z', () => {
+    const model = generateTree(defaultParams);
+    for (const segment of allSegments(model)) {
+      const d = taperSegment(segment.start, segment.c1, segment.c2, segment.end, segment.startThickness, segment.endThickness, model.params.minFeatureSize).trim();
+      expect(d.startsWith('M ')).toBe(true);
+      expect(d.endsWith('Z')).toBe(true);
+    }
+  });
+
+  it('mask shapes contain interior points and reject exterior points', () => {
+    const masks = [new CircleMask(100), new StarMask(100, 5, 0.45), new HeartMask(100), new SilhouetteMask(100, defaultParams.silhouettePath)];
+    for (const mask of masks) {
+      expect(mask.contains({ x: 0, y: 0 })).toBe(true);
+      expect(mask.contains({ x: 1000, y: 1000 })).toBe(false);
+    }
+  });
+
+  it('root balance 0 produces no root nodes', () => {
+    const model = generateTree({ ...defaultParams, rootBalance: 0 });
+    expect(model.nodes.some((node) => node.kind === 'root')).toBe(false);
   });
 });
