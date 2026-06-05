@@ -23,8 +23,11 @@ function pathsFor(chains: Chain[], fill: string, minFeatureSize: number): string
 function byDepthDesc(a: Chain, b: Chain): number { return b.depth - a.depth; }
 function jointCircles(nodes: TreeNode[]): string {
   return nodes
-    .filter((node) => node.childIds.length >= 2)
-    .map((node) => `<circle cx="${fmt(node.position.x)}" cy="${fmt(node.position.y)}" r="${fmt(node.thickness / 2)}" fill="${node.kind === 'root' ? '#1f2937' : '#111827'}" />`)
+    .filter((node) => node.childIds.length > 0)
+    .map((node) => {
+      const radius = node.thickness / 2 + 0.75;
+      return `<circle cx="${fmt(node.position.x)}" cy="${fmt(node.position.y)}" r="${fmt(radius)}" fill="${node.kind === 'root' ? '#1f2937' : '#111827'}" />`;
+    })
     .join('\n');
 }
 
