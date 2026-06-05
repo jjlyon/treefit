@@ -1,0 +1,42 @@
+import type { TreeParams } from './types';
+
+export const defaultParams: TreeParams = {
+  canvasSize: 900,
+  radius: 390,
+  seed: 'treefit-001',
+  branchDensity: 0.58,
+  rootDensity: 0.46,
+  maxBranchDepth: 8,
+  maxRootDepth: 6,
+  trunkThickness: 28,
+  minThickness: 1.4,
+  branchRootBalance: 0.55,
+  curvature: 0.5,
+  jitter: 0.35,
+  margin: 18,
+  minFeatureSize: 5,
+  simplifyTolerance: 0.3,
+  renderMode: 'stroke',
+  generationMode: 'structured',
+  showMask: true,
+  showRoots: true,
+  showBarkDetail: true,
+  showLeaves: false,
+};
+
+export const controlLimits = {
+  canvasSize: { min: 320, max: 1400, step: 10 },
+  radius: { min: 120, max: 650, step: 5 },
+  branchDensity: { min: 0, max: 1, step: 0.01 },
+  rootDensity: { min: 0, max: 1, step: 0.01 },
+  maxBranchDepth: { min: 1, max: 10, step: 1 },
+  maxRootDepth: { min: 0, max: 9, step: 1 },
+  trunkThickness: { min: 4, max: 60, step: 1 },
+  minThickness: { min: 0.5, max: 8, step: 0.1 },
+  branchRootBalance: { min: 0, max: 1, step: 0.01 },
+  curvature: { min: 0, max: 1, step: 0.01 },
+  jitter: { min: 0, max: 1, step: 0.01 },
+  margin: { min: 0, max: 80, step: 1 },
+  minFeatureSize: { min: 1, max: 40, step: 1 },
+  simplifyTolerance: { min: 0, max: 5, step: 0.1 },
+} as const;
