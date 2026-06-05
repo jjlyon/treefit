@@ -3,35 +3,46 @@ export interface Point {
   y: number;
 }
 
-export type RenderMode = 'stroke' | 'outline';
-export type GenerationMode = 'structured' | 'wild';
 export type SegmentKind = 'trunk' | 'branch' | 'root';
+export type MaskShape = 'circle' | 'star' | 'heart' | 'silhouette';
 
 export interface TreeParams {
   canvasSize: number;
-  radius: number;
+  maskShape: MaskShape;
+  maskRadius: number;
+  maskMargin: number;
+  starPoints: number;
+  starInnerRatio: number;
+  silhouettePreset: string;
+  silhouettePath: string;
+  showMask: boolean;
   seed: string;
-  branchDensity: number;
-  rootDensity: number;
-  maxBranchDepth: number;
-  maxRootDepth: number;
+  attractorCount: number;
+  influenceRadius: number;
+  killRadius: number;
+  stepSize: number;
+  jitter: number;
+  trunkLength: number;
+  rootBalance: number;
   trunkThickness: number;
   minThickness: number;
-  branchRootBalance: number;
-  curvature: number;
-  jitter: number;
-  margin: number;
-  minFeatureSize: number;
-  simplifyTolerance: number;
-  renderMode: RenderMode;
-  generationMode: GenerationMode;
-  showMask: boolean;
-  showRoots: boolean;
-  showBarkDetail: boolean;
+  curveSmoothness: number;
   showLeaves: boolean;
+  leafSize: number;
+  minFeatureSize: number;
 }
 
-export interface BranchSegment {
+export interface TreeNode {
+  id: number;
+  position: Point;
+  parentId: number | null;
+  childIds: number[];
+  depth: number;
+  thickness: number;
+  kind: SegmentKind;
+}
+
+export interface BezierSegment {
   id: string;
   kind: SegmentKind;
   start: Point;
@@ -41,23 +52,16 @@ export interface BranchSegment {
   startThickness: number;
   endThickness: number;
   depth: number;
-  parentId?: string;
-  childrenIds: string[];
+  startNodeId: number;
+  endNodeId: number;
 }
 
-export interface LinePrimitive {
+export interface TreeChain {
   id: string;
-  kind: 'line';
-  start: Point;
-  end: Point;
-  width: number;
-}
-
-export interface CirclePrimitive {
-  id: string;
-  kind: 'circle';
-  center: Point;
-  radius: number;
+  kind: SegmentKind;
+  nodeIds: number[];
+  segments: BezierSegment[];
+  depth: number;
 }
 
 export interface LeafPrimitive {
@@ -68,15 +72,17 @@ export interface LeafPrimitive {
   rotation: number;
 }
 
-export type BarkPrimitive = LinePrimitive;
-
 export interface TreeModel {
   params: TreeParams;
-  segments: BranchSegment[];
-  barkDetails: BarkPrimitive[];
+  nodes: TreeNode[];
+  chains: TreeChain[];
   leaves: LeafPrimitive[];
   warnings: string[];
+  maskSvgClipPath: string;
+  maskSvgOutline: string;
   stats: {
+    nodeCount: number;
+    chainCount: number;
     segmentCount: number;
     estimatedPathCount: number;
     generationMs: number;
@@ -88,4 +94,6 @@ export interface Mask {
   projectInside(point: Point, margin: number): Point;
   boundaryPoint(angleRadians: number, margin: number): Point;
   bounds(): { minX: number; minY: number; maxX: number; maxY: number };
+  svgClipPath(id: string): string;
+  svgOutline(): string;
 }

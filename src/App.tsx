@@ -7,14 +7,13 @@ import { defaultParams } from './lib/defaultParams';
 import { downloadSvg } from './lib/svgExport';
 import type { TreeParams } from './lib/types';
 
-function randomSeed(): string {
-  return `treefit-${Math.random().toString(36).slice(2, 9)}`;
-}
+function randomSeed(): string { return `treefit-${Math.random().toString(36).slice(2, 9)}`; }
 
 function normalizeParams(params: TreeParams): TreeParams {
-  const radius = Math.min(params.radius, params.canvasSize / 2 - 8);
-  const margin = Math.min(params.margin, Math.max(0, radius - 8));
-  return { ...params, radius, margin };
+  const maskRadius = Math.min(params.maskRadius, params.canvasSize / 2 - 8);
+  const maskMargin = Math.min(params.maskMargin, Math.max(0, maskRadius - 8));
+  const rootBalance = Math.max(0, Math.min(1, params.rootBalance));
+  return { ...params, maskRadius, maskMargin, rootBalance };
 }
 
 export default function App() {
@@ -25,14 +24,7 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <Controls
-        params={safeParams}
-        onChange={setParams}
-        onRandomizeSeed={() => setParams((current) => ({ ...current, seed: randomSeed() }))}
-        onRegenerate={() => setVersion((current) => current + 1)}
-        onReset={() => setParams(defaultParams)}
-        onExport={() => model && downloadSvg(model)}
-      />
+      <Controls params={safeParams} onChange={setParams} onRandomizeSeed={() => setParams((current) => ({ ...current, seed: randomSeed() }))} onRegenerate={() => setVersion((current) => current + 1)} onReset={() => setParams(defaultParams)} onExport={() => model && downloadSvg(model)} />
       <section className="preview-column">
         <SvgPreview model={model} isGenerating={isGenerating} />
         <StatusBar model={model} isGenerating={isGenerating} />
