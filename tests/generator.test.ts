@@ -53,6 +53,33 @@ describe('TreeFit generator', () => {
     expect(high.stats.segmentCount).toBeGreaterThan(low.stats.segmentCount);
   });
 
+
+  it('structured mode preserves readable tree anatomy', () => {
+    const model = generateTree(defaultParams);
+    const trunks = model.segments.filter((segment) => segment.kind === 'trunk');
+    const branches = model.segments.filter((segment) => segment.kind === 'branch');
+    const roots = model.segments.filter((segment) => segment.kind === 'root');
+    const primaryBranches = branches.filter((segment) => segment.depth === 1);
+    const primaryRoots = roots.filter((segment) => segment.depth === 1);
+    const minTrunkEndThickness = Math.min(...trunks.map((segment) => segment.endThickness));
+    const maxBranchThickness = Math.max(...branches.map((segment) => Math.max(segment.startThickness, segment.endThickness)));
+
+    expect(model.params.generationMode).toBe('structured');
+    expect(trunks.length).toBeGreaterThanOrEqual(1);
+    expect(trunks.length).toBeLessThanOrEqual(3);
+    expect(primaryBranches.length).toBeGreaterThanOrEqual(6);
+    expect(primaryBranches.length).toBeLessThanOrEqual(12);
+    expect(primaryRoots.length).toBeGreaterThanOrEqual(5);
+    expect(primaryRoots.length).toBeLessThanOrEqual(10);
+    expect(maxBranchThickness).toBeLessThan(minTrunkEndThickness);
+    expect(branches.filter((segment) => segment.end.y < segment.start.y).length / branches.length).toBeGreaterThan(0.9);
+    expect(roots.filter((segment) => segment.end.y > segment.start.y).length / roots.length).toBeGreaterThan(0.9);
+    expect(primaryBranches.every((segment) => segment.end.y < segment.start.y)).toBe(true);
+    expect(primaryRoots.every((segment) => segment.end.y > segment.start.y)).toBe(true);
+    expect(primaryBranches.every((segment) => segment.start.y < model.params.radius * 0.32)).toBe(true);
+    expect(primaryRoots.every((segment) => segment.start.y > model.params.radius * 0.34)).toBe(true);
+  });
+
   it('generated SVG contains named groups', () => {
     const svg = modelToSvg(generateTree(defaultParams));
     for (const group of ['mask', 'trunk', 'branches', 'roots', 'bark_detail', 'leaves']) {

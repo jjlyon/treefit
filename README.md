@@ -41,11 +41,12 @@ npm run build
 - **Minimum feature size**: suppresses tiny or degenerate CNC-unfriendly segments.
 - **Simplify tolerance**: reserved for future outline/polyline simplification paths.
 - **Render mode**: stroke mode is implemented; outline mode is available in the UI and falls back to stroke with a warning.
+- **Generation mode**: structured mode is the default and builds explicit trunk, primary branch, secondary branch, twig, primary root, and rootlet stages; wild mode keeps a looser experimental variant.
 - **Layer toggles**: show/hide mask, roots, bark detail, and leaves.
 
 ## Architecture
 
-The generation pipeline is in `src/lib/generator.ts` and has no React dependency. It accepts a serializable `TreeParams` object and returns a serializable `TreeModel`, which can be used by:
+The generation pipeline is in `src/lib/generator.ts` and has no React dependency. The default structured mode builds an explicit anatomy-first skeleton so the tree remains legible before optional bark or leaf layers are added. It accepts a serializable `TreeParams` object and returns a serializable `TreeModel`, which can be used by:
 
 - main-thread preview generation,
 - the included Web Worker wrapper,

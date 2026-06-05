@@ -1,5 +1,5 @@
 import { controlLimits, defaultParams } from '../lib/defaultParams';
-import type { RenderMode, TreeParams } from '../lib/types';
+import type { GenerationMode, RenderMode, TreeParams } from '../lib/types';
 
 interface ControlsProps {
   params: TreeParams;
@@ -64,6 +64,13 @@ export function Controls({ params, onChange, onRandomizeSeed, onRegenerate, onRe
           <select value={params.renderMode} onChange={(event) => setParam('renderMode', event.target.value as RenderMode)}>
             <option value="stroke">Stroke</option>
             <option value="outline">Outline (stroke fallback)</option>
+          </select>
+        </label>
+        <label className="control">
+          <span>Generation mode</span>
+          <select value={params.generationMode} onChange={(event) => setParam('generationMode', event.target.value as GenerationMode)}>
+            <option value="structured">Structured (default)</option>
+            <option value="wild">Wild</option>
           </select>
         </label>
       </section>

@@ -4,6 +4,7 @@ export interface Point {
 }
 
 export type RenderMode = 'stroke' | 'outline';
+export type GenerationMode = 'structured' | 'wild';
 export type SegmentKind = 'trunk' | 'branch' | 'root';
 
 export interface TreeParams {
@@ -23,6 +24,7 @@ export interface TreeParams {
   minFeatureSize: number;
   simplifyTolerance: number;
   renderMode: RenderMode;
+  generationMode: GenerationMode;
   showMask: boolean;
   showRoots: boolean;
   showBarkDetail: boolean;

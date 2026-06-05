@@ -17,6 +17,7 @@ export const defaultParams: TreeParams = {
   minFeatureSize: 5,
   simplifyTolerance: 0.3,
   renderMode: 'stroke',
+  generationMode: 'structured',
   showMask: true,
   showRoots: true,
   showBarkDetail: true,
