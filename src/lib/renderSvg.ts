@@ -21,13 +21,15 @@ function pathsFor(chains: Chain[], fill: string, minFeatureSize: number): string
   return chains.flatMap((chain) => chain.segments.map((segment) => `<path d="${taperSegment(segment, minFeatureSize)}" fill="${fill}" />`)).join('\n');
 }
 function byDepthDesc(a: Chain, b: Chain): number { return b.depth - a.depth; }
+function jointRadius(node: TreeNode): number {
+  const limbRadius = node.thickness / 2;
+  if (node.childIds.length >= 2) return limbRadius;
+  return Math.min(limbRadius, 1.1);
+}
 function jointCircles(nodes: TreeNode[]): string {
   return nodes
     .filter((node) => node.childIds.length > 0)
-    .map((node) => {
-      const radius = node.thickness / 2 + 0.75;
-      return `<circle cx="${fmt(node.position.x)}" cy="${fmt(node.position.y)}" r="${fmt(radius)}" fill="${node.kind === 'root' ? '#1f2937' : '#111827'}" />`;
-    })
+    .map((node) => `<circle cx="${fmt(node.position.x)}" cy="${fmt(node.position.y)}" r="${fmt(jointRadius(node))}" fill="${node.kind === 'root' ? '#1f2937' : '#111827'}" />`)
     .join('\n');
 }
 

@@ -55,12 +55,17 @@ describe('TreeFit generator', () => {
     for (const id of ['trunk', 'branches', 'roots', 'mask-outline', 'leaves', 'tree', 'joints']) expect(svg).toContain(`id="${id}"`);
   });
 
-  it('renders a joint circle for every interior node', () => {
+  it('renders subtle seam circles for interior nodes without bulging single-child joins', () => {
     const model = generateTree(fastParams);
     const svg = modelToSvgInner(model);
     const jointGroup = svg.match(/<g id="joints">([\s\S]*?)<\/g>/)?.[1] ?? '';
-    const circles = [...jointGroup.matchAll(/<circle /g)];
-    expect(circles).toHaveLength(model.nodes.filter((node) => node.childIds.length > 0).length);
+    const circles = [...jointGroup.matchAll(/<circle [^>]*r="([^"]+)"/g)];
+    const interiorNodes = model.nodes.filter((node) => node.childIds.length > 0);
+    expect(circles).toHaveLength(interiorNodes.length);
+    for (const [index, circle] of circles.entries()) {
+      const radius = Number(circle[1]);
+      if (interiorNodes[index].childIds.length === 1) expect(radius).toBeLessThanOrEqual(1.1);
+    }
   });
 
   it('no NaN in any generated node coordinate', () => {
