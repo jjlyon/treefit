@@ -52,20 +52,13 @@ describe('TreeFit generator', () => {
 
   it('SVG contains required group ids', () => {
     const svg = modelToSvgInner(generateTree(fastParams));
-    for (const id of ['trunk', 'branches', 'roots', 'mask-outline', 'leaves', 'tree', 'joints']) expect(svg).toContain(`id="${id}"`);
+    for (const id of ['trunk', 'branches', 'roots', 'mask-outline', 'leaves', 'tree']) expect(svg).toContain(`id="${id}"`);
   });
 
-  it('renders subtle seam circles for interior nodes without bulging single-child joins', () => {
-    const model = generateTree(fastParams);
-    const svg = modelToSvgInner(model);
-    const jointGroup = svg.match(/<g id="joints">([\s\S]*?)<\/g>/)?.[1] ?? '';
-    const circles = [...jointGroup.matchAll(/<circle [^>]*r="([^"]+)"/g)];
-    const interiorNodes = model.nodes.filter((node) => node.childIds.length > 0);
-    expect(circles).toHaveLength(interiorNodes.length);
-    for (const [index, circle] of circles.entries()) {
-      const radius = Number(circle[1]);
-      if (interiorNodes[index].childIds.length === 1) expect(radius).toBeLessThanOrEqual(1.1);
-    }
+
+  it('does not render node-joint circles', () => {
+    const svg = modelToSvgInner(generateTree(fastParams));
+    expect(svg).not.toContain('id="joints"');
   });
 
   it('no NaN in any generated node coordinate', () => {

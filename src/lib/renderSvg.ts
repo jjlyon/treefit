@@ -1,6 +1,6 @@
 import { createMask } from './masks';
 import { taperSegment } from './taperOutline';
-import type { Chain, LeafPrimitive, Point, TreeModel, TreeNode, TreeParams } from './types';
+import type { Chain, LeafPrimitive, Point, TreeModel, TreeParams } from './types';
 
 function fmt(n: number): string { return Number(n.toFixed(2)).toString(); }
 function transform(point: Point, angle: number, radius: number, localX: number, localY: number): Point {
@@ -21,18 +21,6 @@ function pathsFor(chains: Chain[], fill: string, minFeatureSize: number): string
   return chains.flatMap((chain) => chain.segments.map((segment) => `<path d="${taperSegment(segment, minFeatureSize)}" fill="${fill}" />`)).join('\n');
 }
 function byDepthDesc(a: Chain, b: Chain): number { return b.depth - a.depth; }
-function jointRadius(node: TreeNode): number {
-  const limbRadius = node.thickness / 2;
-  if (node.childIds.length >= 2) return limbRadius;
-  return Math.min(limbRadius, 1.1);
-}
-function jointCircles(nodes: TreeNode[]): string {
-  return nodes
-    .filter((node) => node.childIds.length > 0)
-    .map((node) => `<circle cx="${fmt(node.position.x)}" cy="${fmt(node.position.y)}" r="${fmt(jointRadius(node))}" fill="${node.kind === 'root' ? '#1f2937' : '#111827'}" />`)
-    .join('\n');
-}
-
 export function viewBoxForParams(params: TreeParams): string {
   const half = params.canvasSize / 2;
   return `${-half} ${-half} ${params.canvasSize} ${params.canvasSize}`;
@@ -44,7 +32,6 @@ export function modelToSvgInner(model: TreeModel): string {
   const trunk = model.chains.filter((chain) => chain.kind === 'trunk');
   const branches = model.chains.filter((chain) => chain.kind === 'branch').sort(byDepthDesc);
   const leaves = model.params.showLeaves ? model.leaves.map((leaf) => `<path d="${leafPath(leaf)}" fill="#111827" />`).join('\n') : '';
-  const joints = jointCircles(model.nodes);
   return `<defs>
   ${mask.svgClipPath('tree-clip')}
 </defs>
@@ -60,9 +47,6 @@ ${pathsFor(trunk, '#111827', model.params.minFeatureSize)}
   </g>
   <g id="branches">
 ${pathsFor(branches, '#111827', model.params.minFeatureSize)}
-  </g>
-  <g id="joints">
-${joints}
   </g>
   <g id="leaves">
 ${leaves}
