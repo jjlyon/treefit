@@ -42,9 +42,17 @@ describe('TreeFit generator', () => {
     expect(high).toBeGreaterThan(low);
   });
 
+  it('extracts exactly one continuous trunk chain', () => {
+    const model = generateTree(defaultParams);
+    const trunkChains = model.chains.filter((chain) => chain.kind === 'trunk');
+    const trunkNodes = model.nodes.filter((node) => node.kind === 'trunk');
+    expect(trunkChains).toHaveLength(1);
+    expect(trunkChains[0].nodeIds).toEqual(trunkNodes.map((node) => node.id));
+  });
+
   it('SVG contains required group ids', () => {
     const svg = modelToSvgInner(generateTree(fastParams));
-    for (const id of ['trunk', 'branches', 'roots', 'mask-outline', 'leaves', 'tree']) expect(svg).toContain(`id="${id}"`);
+    for (const id of ['trunk', 'branches', 'roots', 'mask-outline', 'leaves', 'tree', 'joints']) expect(svg).toContain(`id="${id}"`);
   });
 
   it('no NaN in any generated node coordinate', () => {

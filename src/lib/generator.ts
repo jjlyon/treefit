@@ -1,22 +1,73 @@
-import { add, angleOf, clamp, distance, isFinitePoint, normalize, scale, sub } from './geometry';
+import { add, angleOf, clamp, isFinitePoint, normalize, scale, sub } from './geometry';
 import { createMask } from './masks';
 import { SeededRandom } from './random';
 import { extractChains, fitCurves } from './spline';
 import type { LeafPrimitive, Mask, NodeKind, Point, TreeModel, TreeNode, TreeParams } from './types';
 
 function now(): number { return typeof performance === 'undefined' ? 0 : performance.now(); }
+function distanceSquared(a: Point, b: Point): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return dx * dx + dy * dy;
+}
 
-function scatterAttractors(mask: Mask, rng: SeededRandom, count: number, predicate: (point: Point) => boolean): Point[] {
+class SpatialGrid {
+  private readonly cells = new Map<string, TreeNode[]>();
+  private readonly cellSize: number;
+
+  constructor(cellSize: number) {
+    this.cellSize = Math.max(1, cellSize);
+  }
+
+  private key(x: number, y: number): string {
+    return `${Math.floor(x / this.cellSize)},${Math.floor(y / this.cellSize)}`;
+  }
+
+  insert(node: TreeNode): void {
+    const key = this.key(node.position.x, node.position.y);
+    const list = this.cells.get(key);
+    if (list) list.push(node);
+    else this.cells.set(key, [node]);
+  }
+
+  queryNear(point: Point, radius: number): TreeNode[] {
+    const results: TreeNode[] = [];
+    const cellRadius = Math.ceil(radius / this.cellSize);
+    const cx = Math.floor(point.x / this.cellSize);
+    const cy = Math.floor(point.y / this.cellSize);
+    for (let dx = -cellRadius; dx <= cellRadius; dx += 1) {
+      for (let dy = -cellRadius; dy <= cellRadius; dy += 1) {
+        const cell = this.cells.get(`${cx + dx},${cy + dy}`);
+        if (cell) results.push(...cell);
+      }
+    }
+    return results;
+  }
+}
+
+function scatterAttractors(mask: Mask, rng: SeededRandom, count: number, acceptChance: (point: Point, bounds: ReturnType<Mask['bounds']>) => number): Point[] {
   const bounds = mask.bounds();
   const points: Point[] = [];
   let attempts = 0;
-  const maxAttempts = Math.max(2_000, count * 80);
+  const maxAttempts = Math.max(4_000, count * 100);
   while (points.length < count && attempts < maxAttempts) {
     attempts += 1;
     const point = { x: rng.range(bounds.minX, bounds.maxX), y: rng.range(bounds.minY, bounds.maxY) };
-    if (mask.contains(point) && predicate(point)) points.push(point);
+    if (mask.contains(point) && rng.chance(clamp(acceptChance(point, bounds), 0.02, 1))) points.push(point);
   }
   return points;
+}
+
+function branchAcceptChance(point: Point, bounds: ReturnType<Mask['bounds']>): number {
+  const maskHeight = Math.max(1, bounds.maxY - bounds.minY);
+  const normalizedY = (point.y - bounds.minY) / maskHeight;
+  return 0.1 + 0.9 * (1 - normalizedY);
+}
+
+function rootAcceptChance(point: Point, bounds: ReturnType<Mask['bounds']>): number {
+  const maskHeight = Math.max(1, bounds.maxY - bounds.minY);
+  const normalizedY = (point.y - bounds.minY) / maskHeight;
+  return 0.1 + 0.9 * normalizedY;
 }
 
 function createTrunk(params: TreeParams, rng: SeededRandom, mask: Mask): TreeNode[] {
@@ -35,17 +86,18 @@ function createTrunk(params: TreeParams, rng: SeededRandom, mask: Mask): TreeNod
   return nodes;
 }
 
-function grow(allNodes: TreeNode[], attractors: Point[], params: TreeParams, mask: Mask, rng: SeededRandom, kind: NodeKind, canGrow: (node: TreeNode) => boolean): void {
-  let remainingAttractors = attractors;
-  for (let iteration = 0; iteration < 600 && remainingAttractors.length > 0 && allNodes.length < 2_500; iteration += 1) {
+function runGrowthIterations(allNodes: TreeNode[], grid: SpatialGrid, remainingAttractors: Point[], params: TreeParams, mask: Mask, rng: SeededRandom, kind: NodeKind, canGrow: (node: TreeNode) => boolean, influenceRadius: number, maxIterations: number): Point[] {
+  let attractors = remainingAttractors;
+  const influenceRadiusSquared = influenceRadius * influenceRadius;
+  for (let iteration = 0; iteration < maxIterations && attractors.length > 0 && allNodes.length < 1_300; iteration += 1) {
     const influenceMap = new Map<number, Point[]>();
-    for (const attractor of remainingAttractors) {
+    for (const attractor of attractors) {
       let closestNode: TreeNode | null = null;
       let closestDist = Infinity;
-      for (const node of allNodes) {
+      for (const node of grid.queryNear(attractor, influenceRadius)) {
         if (!canGrow(node)) continue;
-        const d = distance(attractor, node.position);
-        if (d < closestDist && d < params.influenceRadius) {
+        const d = distanceSquared(attractor, node.position);
+        if (d < closestDist && d < influenceRadiusSquared) {
           closestNode = node;
           closestDist = d;
         }
@@ -57,22 +109,37 @@ function grow(allNodes: TreeNode[], attractors: Point[], params: TreeParams, mas
       }
     }
     if (influenceMap.size === 0) break;
+
     const newNodes: TreeNode[] = [];
     for (const [nodeId, pullers] of influenceMap) {
       const node = allNodes[nodeId];
       let avgDir: Point = { x: 0, y: 0 };
       for (const attractor of pullers) avgDir = add(avgDir, normalize(sub(attractor, node.position)));
+      if (kind === 'branch') avgDir.y -= 0.15;
+      if (kind === 'root') avgDir.y += 0.15;
       avgDir = normalize({ x: avgDir.x + rng.signed(params.jitter), y: avgDir.y + rng.signed(params.jitter) });
-      if (!isFinitePoint(avgDir) || distance(avgDir, { x: 0, y: 0 }) < 1e-9) continue;
+      if (!isFinitePoint(avgDir) || distanceSquared(avgDir, { x: 0, y: 0 }) < 1e-9) continue;
       const newPos = mask.projectInside(add(node.position, scale(avgDir, params.stepSize)), params.maskMargin);
-      if (distance(newPos, node.position) < params.minFeatureSize) continue;
+      if (distanceSquared(newPos, node.position) < params.minFeatureSize * params.minFeatureSize) continue;
       const newNode: TreeNode = { id: allNodes.length + newNodes.length, position: newPos, parentId: nodeId, childIds: [], depth: node.depth + 1, thickness: 0, kind };
       node.childIds.push(newNode.id);
       newNodes.push(newNode);
     }
     if (newNodes.length === 0) break;
     allNodes.push(...newNodes);
-    remainingAttractors = remainingAttractors.filter((attractor) => !allNodes.some((node) => distance(attractor, node.position) < params.killRadius));
+    for (const node of newNodes) grid.insert(node);
+    const killRadiusSquared = params.killRadius * params.killRadius;
+    attractors = attractors.filter((attractor) => !grid.queryNear(attractor, params.killRadius).some((node) => distanceSquared(attractor, node.position) < killRadiusSquared));
+  }
+  return attractors;
+}
+
+function grow(allNodes: TreeNode[], attractors: Point[], params: TreeParams, mask: Mask, rng: SeededRandom, kind: NodeKind, canGrow: (node: TreeNode) => boolean): void {
+  const grid = new SpatialGrid(Math.max(params.killRadius * 2, params.influenceRadius / 3));
+  for (const node of allNodes) grid.insert(node);
+  const remainingAttractors = runGrowthIterations(allNodes, grid, attractors, params, mask, rng, kind, canGrow, params.influenceRadius, 600);
+  if (remainingAttractors.length > 0) {
+    runGrowthIterations(allNodes, grid, remainingAttractors, params, mask, rng, kind, canGrow, params.influenceRadius * 1.5, 60);
   }
 }
 
@@ -99,16 +166,15 @@ export function generateTree(params: TreeParams): TreeModel {
   const started = now();
   const mask = createMask(params);
   const rng = new SeededRandom(params.seed);
-  const radius = params.maskRadius - params.maskMargin;
-  const trunkBaseY = radius * 0.45;
-  const trunkTopY = radius * (0.45 - params.trunkLength * 1.35);
   const branchBudget = Math.floor(params.attractorCount * (1 - params.rootBalance));
   const rootBudget = params.attractorCount - branchBudget;
-  const branchAttractors = scatterAttractors(mask, rng, branchBudget, (point) => point.y < trunkTopY + params.influenceRadius);
-  const rootAttractors = scatterAttractors(mask, rng, rootBudget, (point) => point.y > trunkBaseY - params.influenceRadius);
+  const branchAttractors = scatterAttractors(mask, rng, branchBudget, branchAcceptChance);
+  const rootAttractors = scatterAttractors(mask, rng, rootBudget, rootAcceptChance);
   const nodes = createTrunk(params, rng, mask);
   const trunkBaseIds = new Set(nodes.slice(0, 3).map((node) => node.id));
-  grow(nodes, branchAttractors, params, mask, rng, 'branch', (node) => node.kind !== 'root');
+  const trunkMidpoint = Math.floor(nodes.length * 0.4);
+  const upperTrunkIds = new Set(nodes.slice(trunkMidpoint).map((node) => node.id));
+  grow(nodes, branchAttractors, params, mask, rng, 'branch', (node) => node.kind === 'branch' || upperTrunkIds.has(node.id));
   if (rootBudget > 0) grow(nodes, rootAttractors, params, mask, rng, 'root', (node) => node.kind === 'root' || trunkBaseIds.has(node.id));
   computeThickness(nodes, params);
   const chains = extractChains(nodes).map((chain) => {
