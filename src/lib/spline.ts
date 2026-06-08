@@ -7,8 +7,13 @@ function findTrunkSpine(nodes: TreeNode[]): number[] {
   const spine = [root.id];
   let current = root;
   while (true) {
-    const nextId = current.childIds.find((childId) => nodes[childId].kind === 'trunk');
-    if (nextId === undefined) break;
+    const trunkChildren = current.childIds.filter((childId) => nodes[childId].kind === 'trunk');
+    if (trunkChildren.length === 0) break;
+    const nextId = trunkChildren.reduce((bestId, childId) => {
+      const bestDelta = nodes[bestId].position.y - current.position.y;
+      const childDelta = nodes[childId].position.y - current.position.y;
+      return childDelta < bestDelta ? childId : bestId;
+    }, trunkChildren[0]);
     spine.push(nextId);
     current = nodes[nextId];
   }
